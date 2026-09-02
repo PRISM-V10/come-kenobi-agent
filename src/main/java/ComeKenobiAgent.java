@@ -1,15 +1,21 @@
-import java.io.File;
 import java.io.IOException;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import markets.alpaca.client.AlpacaClient;
 import markets.alpaca.client.AlpacaCredentials;
@@ -53,19 +59,16 @@ public class ComeKenobiAgent {
     private static final String SYMBOL = "SPY";
     // Dollar amount to spend per buy (notional order), not a share count.
     private static final String NOTIONAL_PER_TRADE = "2.00";
-    private static final String TRADE_STATE_FILE = "trade_state.txt";
 
     private boolean isActive = true;
-    // Epoch-day timestamp of each recent trade. This is what makes the
-    // 5-day limit an actual rolling window: on every check we drop entries
-    // older than 5 days and count what's left, rather than resetting a
-    // counter from a fixed anchor point.
-    private final List<Long> recentTradeDays = new ArrayList<>();
 
     private final AuditTrail bossLog = new AuditTrail("BOSS");
     private final AuditTrail guardianLog = new AuditTrail("GUARDIAN");
     private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
     private final AlpacaClient client;
+    private final HttpClient httpClient = HttpClient.newHttpClient();
+    private final String supabaseUrl;
+    private final String supabaseKey;
 
     public static void main(String[] args) throws Exception {
         loadEnv();
@@ -101,8 +104,17 @@ public class ComeKenobiAgent {
     public ComeKenobiAgent() {
         bossLog.log("Agent initializing…");
         this.client = buildClient();
-        loadTradeState();
+        this.supabaseUrl = getConfig("SUPABASE_URL");
+        this.supabaseKey = getConfig("SUPABASE_ANON_KEY");
+        if (isBlank(supabaseUrl) || isBlank(supabaseKey)) {
+            guardianLog.log("⚠️ Supabase credentials missing — trade history can't be verified, "
+                + "so trades will be blocked (fail-safe) until SUPABASE_URL/SUPABASE_ANON_KEY are set.");
+        }
         logAccountSnapshot();
+    }
+
+    private static boolean isBlank(String s) {
+        return s == null || s.isEmpty();
     }
 
     private AlpacaClient buildClient() {
@@ -148,7 +160,6 @@ public class ComeKenobiAgent {
     }
 
     private void tick() {
-        loadTradeState();
         if (!isActive) return;
 
         if (!canTrade()) {
@@ -161,43 +172,84 @@ public class ComeKenobiAgent {
     }
 
     private boolean canTrade() {
-        long today = LocalDate.now().toEpochDay();
+        List<Long> recentTradeDays = fetchRecentTradeDays();
+        if (recentTradeDays == null) {
+            // Couldn't verify history from Supabase — block rather than risk
+            // trading blind and exceeding the intended limit.
+            guardianLog.log("⏳ Could not verify trade history — blocking trade to be safe.");
+            return false;
+        }
 
-        // Drop any trade older than 5 days — this is the "rolling" part.
-        // At any moment, recentTradeDays only holds trades from the last
-        // 5 calendar days (today and the 4 before it).
+        long today = LocalDate.now().toEpochDay();
         recentTradeDays.removeIf(day -> today - day >= 5);
 
         boolean alreadyTradedToday = recentTradeDays.contains(today);
         return !alreadyTradedToday && recentTradeDays.size() < 3;
     }
 
-    private void loadTradeState() {
-        recentTradeDays.clear();
+    // Pulls recent trade timestamps from Supabase's trade_log table and
+    // returns them as epoch-days. Returns null on any failure so canTrade()
+    // can fail safe instead of assuming "no trades" and over-trading.
+    private List<Long> fetchRecentTradeDays() {
+        if (isBlank(supabaseUrl) || isBlank(supabaseKey)) {
+            return null;
+        }
         try {
-            File file = new File(TRADE_STATE_FILE);
-            if (file.exists()) {
-                for (String line : Files.readAllLines(Paths.get(TRADE_STATE_FILE))) {
-                    line = line.trim();
-                    if (!line.isEmpty()) {
-                        recentTradeDays.add(Long.parseLong(line));
-                    }
-                }
+            String url = supabaseUrl + "/rest/v1/trade_log?select=timestamp&order=timestamp.desc&limit=50";
+            HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(url))
+                .header("apikey", supabaseKey)
+                .header("Authorization", "Bearer " + supabaseKey)
+                .GET()
+                .build();
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
+            if (response.statusCode() != 200) {
+                guardianLog.log("Supabase trade history fetch failed: HTTP " + response.statusCode()
+                    + " " + response.body());
+                return null;
             }
+
+            List<Long> days = new ArrayList<>();
+            Matcher m = Pattern.compile("\"timestamp\":\"([^\"]+)\"").matcher(response.body());
+            while (m.find()) {
+                days.add(OffsetDateTime.parse(m.group(1)).toLocalDate().toEpochDay());
+            }
+            return days;
         } catch (Exception e) {
-            bossLog.log("⚠️ Failed to load trade state: " + e.getMessage());
+            guardianLog.log("Error fetching trade history from Supabase: " + e.getMessage());
+            return null;
         }
     }
 
-    private void saveTradeState() {
+    // Records a completed order in Supabase's trade_log table.
+    private void recordTrade(String orderId, String status) {
         try {
-            StringBuilder content = new StringBuilder();
-            for (long day : recentTradeDays) {
-                content.append(day).append("\n");
+            String body = "{"
+                + "\"symbol\":\"" + SYMBOL + "\","
+                + "\"side\":\"buy\","
+                + "\"notional\":" + NOTIONAL_PER_TRADE + ","
+                + "\"status\":\"" + status + "\","
+                + "\"order_id\":\"" + orderId + "\"}";
+
+            HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(supabaseUrl + "/rest/v1/trade_log"))
+                .header("apikey", supabaseKey)
+                .header("Authorization", "Bearer " + supabaseKey)
+                .header("Content-Type", "application/json")
+                .header("Prefer", "return=minimal")
+                .POST(HttpRequest.BodyPublishers.ofString(body))
+                .build();
+
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() >= 200 && response.statusCode() < 300) {
+                bossLog.log("🗃️  Trade recorded in Supabase.");
+            } else {
+                guardianLog.log("Failed to record trade in Supabase: HTTP " + response.statusCode()
+                    + " " + response.body());
             }
-            Files.write(Paths.get(TRADE_STATE_FILE), content.toString().getBytes());
         } catch (Exception e) {
-            bossLog.log("⚠️ Failed to save trade state: " + e.getMessage());
+            guardianLog.log("Error recording trade in Supabase: " + e.getMessage());
         }
     }
 
@@ -228,8 +280,7 @@ public class ComeKenobiAgent {
             var order = ordersApi.postOrder(request);
             bossLog.log("✅ Order submitted — id=" + order.getId() + " status=" + order.getStatus());
 
-            recentTradeDays.add(LocalDate.now().toEpochDay());
-            saveTradeState();
+            recordTrade(order.getId(), String.valueOf(order.getStatus()));
             logAccountSnapshot(); // real numbers, not a fake increment
 
         } catch (Exception e) {
