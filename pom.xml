@@ -38,6 +38,31 @@
                     <mainClass>ComeKenobiAgent</mainClass>
                 </configuration>
             </plugin>
+            <!-- Builds a self-contained "fat jar" — all dependencies bundled inside,
+                 plus a manifest declaring the main class. This is what lets a plain
+                 `java -jar target/comekenobi-agent-1.0-SNAPSHOT.jar` (what Railway
+                 runs by default) actually work, without needing exec-maven-plugin's
+                 classpath wiring. Local `mvn exec:java` is unaffected by this. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-shade-plugin</artifactId>
+                <version>3.6.0</version>
+                <executions>
+                    <execution>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>shade</goal>
+                        </goals>
+                        <configuration>
+                            <transformers>
+                                <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+                                    <mainClass>ComeKenobiAgent</mainClass>
+                                </transformer>
+                            </transformers>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
         </plugins>
     </build>
 </project>
