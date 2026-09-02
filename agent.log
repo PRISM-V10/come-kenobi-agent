@@ -1,0 +1,12 @@
+✅ Loaded .env file
+[BOSS] 2026-09-02T15:25:47.045157Z — Agent initialized. Alpaca balance: $20.0
+[BOSS] 2026-09-02T15:25:47.052262Z — 📂 Loaded trade state: tradesToday=0, tradesIn5Days=0
+[BOSS] 2026-09-02T15:25:47.064875Z — Server listening on port 8080.
+[BOSS] 2026-09-02T15:31:21.246426Z — Received webhook: 
+[BOSS] 2026-09-02T15:31:21.247043Z — 📂 Loaded trade state: tradesToday=0, tradesIn5Days=0
+[BOSS] 2026-09-02T15:31:21.253139Z — 📈 Executing strategy: SPY Buy
+[BOSS] 2026-09-02T15:31:21.253210Z — 🎯 Trading symbol: SPY
+[BOSS] 2026-09-02T15:31:21.257122Z — Trade executed | Profit: $0.10
+[BOSS] 2026-09-02T15:33:00.899713Z — Received webhook: 
+[BOSS] 2026-09-02T15:33:00.900245Z — 📂 Loaded trade state: tradesToday=1, tradesIn5Days=1
+[BOSS] 2026-09-02T15:33:00.900324Z — ⏳ Trading blocked – limits reached or conditions not met.

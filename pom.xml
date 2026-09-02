@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 
+         http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>com.ckenobi</groupId>
+    <artifactId>comekenobi-agent</artifactId>
+    <version>1.0-SNAPSHOT</version>
+    <packaging>jar</packaging>
+
+    <properties>
+        <maven.compiler.source>17</maven.compiler.source>
+        <maven.compiler.target>17</maven.compiler.target>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    </properties>
+
+    <dependencies>
+        <!-- Official Alpaca SDK (Java 17+). groupId must stay "markets.alpaca" -
+             other Maven artifacts also called "alpaca-java" (e.g. net.jacobpeterson.alpaca)
+             use a completely different API and won't match ComeKenobiAgent.java. -->
+        <dependency>
+            <groupId>markets.alpaca</groupId>
+            <artifactId>alpaca-java</artifactId>
+            <version>0.1.3</version>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <sourceDirectory>src/main/java</sourceDirectory>
+        <plugins>
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <version>3.1.0</version>
+                <configuration>
+                    <mainClass>ComeKenobiAgent</mainClass>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>
