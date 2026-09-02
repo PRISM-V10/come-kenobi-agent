@@ -1,3 +1,6 @@
 .env
 target/
 *.class
+agent.log
+trade_state.txt
+pending_captions.txt
