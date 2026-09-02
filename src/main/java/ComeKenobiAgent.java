@@ -280,8 +280,7 @@ public class ComeKenobiAgent {
             var order = ordersApi.postOrder(request);
             bossLog.log("✅ Order submitted — id=" + order.getId() + " status=" + order.getStatus());
 
-            recordTrade(order.getId(), String.valueOf(order.getStatus()));
-            logAccountSnapshot(); // real numbers, not a fake increment
+recordTrade(String.valueOf(order.getId()), String.valueOf(order.getStatus()));            logAccountSnapshot(); // real numbers, not a fake increment
 
         } catch (Exception e) {
             bossLog.log("❌ Trade failed: " + e.getMessage());
