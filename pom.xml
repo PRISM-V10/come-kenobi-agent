@@ -17,9 +17,6 @@
     </properties>
 
     <dependencies>
-        <!-- Official Alpaca SDK (Java 17+). groupId must stay "markets.alpaca" -
-             other Maven artifacts also called "alpaca-java" (e.g. net.jacobpeterson.alpaca)
-             use a completely different API and won't match ComeKenobiAgent.java. -->
         <dependency>
             <groupId>markets.alpaca</groupId>
             <artifactId>alpaca-java</artifactId>
@@ -38,11 +35,6 @@
                     <mainClass>ComeKenobiAgent</mainClass>
                 </configuration>
             </plugin>
-            <!-- Builds a self-contained "fat jar" — all dependencies bundled inside,
-                 plus a manifest declaring the main class. This is what lets a plain
-                 `java -jar target/comekenobi-agent-1.0-SNAPSHOT.jar` (what Railway
-                 runs by default) actually work, without needing exec-maven-plugin's
-                 classpath wiring. Local `mvn exec:java` is unaffected by this. -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-shade-plugin</artifactId>
