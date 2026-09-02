@@ -87,6 +87,17 @@ public class ComeKenobiAgent {
         }
     }
 
+    // Checks a value loaded from .env first (local dev), then falls back to a
+    // real OS environment variable (how Railway and most cloud hosts pass
+    // secrets in — no .env file exists there, and never should).
+    private static String getConfig(String key) {
+        String fromEnvFile = System.getProperty(key);
+        if (fromEnvFile != null && !fromEnvFile.isEmpty()) {
+            return fromEnvFile;
+        }
+        return System.getenv(key);
+    }
+
     public ComeKenobiAgent() {
         bossLog.log("Agent initializing…");
         this.client = buildClient();
@@ -95,9 +106,9 @@ public class ComeKenobiAgent {
     }
 
     private AlpacaClient buildClient() {
-        String apiKey = System.getProperty("ALPACA_API_KEY");
-        String secretKey = System.getProperty("ALPACA_SECRET_KEY");
-        String baseUrl = System.getProperty("ALPACA_BASE_URL");
+        String apiKey = getConfig("ALPACA_API_KEY");
+        String secretKey = getConfig("ALPACA_SECRET_KEY");
+        String baseUrl = getConfig("ALPACA_BASE_URL");
 
         // Kept your existing .env variable names so you don't have to change
         // your .env file — just decide PAPER vs PRODUCTION from it.
