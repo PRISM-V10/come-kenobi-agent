@@ -153,7 +153,7 @@ public class ComeKenobiAgent {
 
     private void startAutoTrade() throws InterruptedException {
         bossLog.log("⏰ Auto-trade will run once per hour.");
-        scheduler.scheduleAtFixedRate(this::tick, 0, 1, TimeUnit.HOURS);
+        scheduler.scheduleAtFixedRate(this::tick, 0, 1, TimeUnit.DAYS);
         // Block the main thread on the scheduler itself instead of a manual
         // sleep loop.
         scheduler.awaitTermination(Long.MAX_VALUE, TimeUnit.DAYS);
